@@ -1,0 +1,4 @@
+# Local-only reference material (other projects' code, kept for inspiration).
+# Never meant to be committed to this public repo — see CLAUDE.md.
+reference/*
+!reference/.gitkeep

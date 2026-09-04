@@ -1,5 +1,25 @@
 # ytcte-screens — Session Log
 
+## 2026-09-04 (morning, main)
+
+Merged `overnight/2026-09-04-first-build` into `main` and pushed (user-approved,
+explicit — the real GitHub Pages deploy) with `.nojekyll` added first.
+
+**Shipped v0.1.1**, fast path: the Hebrew date was rendering with nekudos and a
+ב prefix on the month name (from Hebcal's `hebrew` field); switched to
+`heDateParts` (day/month/year joined with spaces), added `dir="rtl"`. Code
+review round 1 came back DO NOT SHIP — not over the diff, but because
+`reference/Code.gs` and `reference/index.html` (a different project's code,
+untracked, no `.gitignore`) were sitting in the repo carrying a Twilio SID,
+staff phone numbers, and a live anonymous-access Apps Script URL, one
+`git add -A` away from landing in this public repo's history. Added
+`.gitignore` (`reference/*`, keeping `.gitkeep`), confirmed via
+`git check-ignore` and a clean `git status`, resubmitted, SHIP on round 2.
+
+**Pending, per code review's non-blocker notes:** the Hebrew date line still
+has no visible degraded indicator on a failed Hebcal lookup (unlike the deck's
+own change-detection path) — logged to `BACKLOG.md`.
+
 ## 2026-09-04 (overnight, branch overnight/2026-09-04-first-build)
 
 **Shipped v0.1.0** — the project's first build: `index.html`, a static portrait

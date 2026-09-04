@@ -167,7 +167,7 @@
     <div id="clock-region">
       <div id="clock-time">--:--:-- --</div>
       <div id="clock-date">&nbsp;</div>
-      <div id="clock-hebrew">&nbsp;</div>
+      <div id="clock-hebrew" dir="rtl">&nbsp;</div>
     </div>
   </div>
   <div id="viewport-debug"></div>
@@ -351,8 +351,11 @@
         return res.json();
       })
       .then(function (data) {
-        if (data && data.hebrew) {
-          hebrewEl.textContent = data.hebrew;
+        const heParts = data && data.heDateParts;
+        if (heParts && heParts.d && heParts.m && heParts.y) {
+          // heDateParts, not the "hebrew" field: "hebrew" carries nekudos and
+          // a ב prefix on the month name that the strip shouldn't show.
+          hebrewEl.textContent = heParts.d + " " + heParts.m + " " + heParts.y;
           lastHebrewFetchDateKey = dateKey;
         }
       })
