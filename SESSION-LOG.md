@@ -1,5 +1,15 @@
 # ytcte-screens — Session Log
 
+## 2026-09-04 (morning, main, continued further)
+
+**Shipped v0.1.3**, fast path: seconds removed from the clock (now
+"H:MM AM/PM"), placeholder text updated to match. Single-round SHIP.
+Non-blockers logged to `BACKLOG.md`: `timeEl` lacks the redundant-write
+guard `dateEl` already has, and removing seconds took away the panel's only
+human-visible liveness cue (the clock-stale watchdog still catches a truly
+frozen tick loop, just less visibly to a passerby) — a product tradeoff, not
+a defect.
+
 ## 2026-09-04 (morning, main, continued)
 
 **Shipped v0.1.2**, fast path: `viewportDebugEnabled` flipped to `false`, and

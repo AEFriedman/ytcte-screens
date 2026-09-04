@@ -165,7 +165,7 @@
       <div id="deck-placeholder">Loading deck&hellip;</div>
     </div>
     <div id="clock-region">
-      <div id="clock-time">--:--:-- --</div>
+      <div id="clock-time">--:-- --</div>
       <div id="clock-date">&nbsp;</div>
       <div id="clock-hebrew" dir="rtl">&nbsp;</div>
     </div>
@@ -286,7 +286,7 @@
     timeZone: CONFIG.timezone, year: "numeric", month: "2-digit", day: "2-digit"
   });
   const timeFormatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: CONFIG.timezone, hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true
+    timeZone: CONFIG.timezone, hour: "numeric", minute: "2-digit", hour12: true
   });
   const dateFormatter = new Intl.DateTimeFormat("en-US", {
     timeZone: CONFIG.timezone, weekday: "long", month: "long", day: "numeric", year: "numeric"
