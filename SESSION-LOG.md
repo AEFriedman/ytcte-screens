@@ -1,5 +1,16 @@
 # ytcte-screens — Session Log
 
+## 2026-09-04 (morning, main, continued)
+
+**Shipped v0.1.2**, fast path: `viewportDebugEnabled` flipped to `false`, and
+nothing else — orientation is confirmed portrait-native on the real screen,
+so the debug readout had served its purpose. Single-round SHIP, no blockers.
+
+Backlog additions (not for this cycle, from the user directly): a nightly
+full-page reload so shipped changes land on the Cast without a manual
+reload; removing the now-confirmed-dead rotation hedge; revisiting strip
+height and clock size after judging them from the hallway.
+
 ## 2026-09-04 (morning, main)
 
 Merged `overnight/2026-09-04-first-build` into `main` and pushed (user-approved,
