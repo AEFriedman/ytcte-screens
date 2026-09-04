@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ytcte-screens</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    background: #000;
+    color: #fff;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    overflow: hidden;
+  }
+
+  /* Single rotation hook: if the Cast turns out to render landscape and rotate
+     afterward, correcting the assumed portrait-native layout is one value here
+     (--rotation) rather than a re-layout of the page. */
+  #viewport-wrapper {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    /* width/height set at startup by applyRotationBox(), swapped when rotated */
+    width: 100vw;
+    height: 100vh;
+    transform: translate(-50%, -50%) rotate(var(--rotation, 0deg));
+    transform-origin: center center;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #deck-region {
+    width: 100%;
+    height: var(--deck-percent, 80%);
+    overflow: hidden;
+    background: #000;
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  /* Deck region is deliberately taller than its box and pulled up by the same
+     amount, cropping off the bottom control bar the Slides embed player draws
+     even with start=true. Parent's overflow:hidden does the cropping. Crop
+     height is unverified against the real panel — see CONFIG.deckChromeCropPx. */
+  #deck-region iframe {
+    width: 100%;
+    height: calc(100% + var(--deck-chrome-crop, 60px));
+    margin-bottom: calc(-1 * var(--deck-chrome-crop, 60px));
+    border: none;
+    display: block;
+  }
+
+  #deck-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+    font-size: 2vh;
+  }
+
+  #clock-region {
+    width: 100%;
+    height: calc(100% - var(--deck-percent, 80%));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1vh;
+    background: #000;
+  }
+
+  #clock-time {
+    font-size: 9vh;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    line-height: 1;
+  }
+
+  #clock-date {
+    font-size: 3vh;
+    font-weight: 500;
+    opacity: 0.9;
+  }
+
+  #clock-hebrew {
+    font-size: 3vh;
+    font-weight: 500;
+    opacity: 0.85;
+  }
+
+  #viewport-debug {
+    position: fixed;
+    top: 6px;
+    left: 8px;
+    font-size: 1.6vh;
+    color: #7CFC9A;
+    background: rgba(0, 0, 0, 0.55);
+    padding: 2px 8px;
+    border-radius: 4px;
+    z-index: 20;
+    display: none;
+  }
+
+  #degraded-indicator {
+    position: fixed;
+    bottom: 6px;
+    right: 8px;
+    font-size: 1.4vh;
+    color: #ffb454;
+    background: rgba(0, 0, 0, 0.55);
+    padding: 2px 8px;
+    border-radius: 4px;
+    z-index: 20;
+    display: none;
+  }
+</style>
+<script>
+  // The only place screen-specific values live. Later multi-screen work should
+  // be able to replace this whole block rather than hunt values out of the page.
+  const CONFIG = {
+    deckEmbedUrl: "https://docs.google.com/presentation/d/e/2PACX-1vSec9HpF4pFI8kkGOQNICwnwvEMdjx9DBchhZ14-9u4mt1WsKYMMdUUQKov3QNFvty1nm5y04Vf4BBj/embed?start=true&loop=true&delayms=5000",
+    deckFileId: "1tvt9mTv5sbVc6YjS2OCo2vSIMAazpOS_bPO3C1JKd9I",
+    regionSplitDeckPercent: 80,
+    deckChromeCropPx: 60,
+    changeDetectionEnabled: false,
+    // Fill in only with a key restricted by HTTP referrer to this site's
+    // origin and scoped to the Drive API — see SPEC.md. Never an unrestricted key.
+    driveApiKey: "",
+    driveApiTimeoutMs: 10 * 1000,
+    fixedReloadIntervalMs: 10 * 60 * 1000,
+    deckLoadTimeoutMs: 20 * 1000,
+    heartbeatCheckIntervalMs: 5 * 1000,
+    clockStaleThresholdMs: 15 * 1000,
+    hebcalTimeoutMs: 10 * 1000,
+    timezone: "America/New_York",
+    viewportDebugEnabled: true,
+    rotationDegrees: 0
+  };
+
+  document.documentElement.style.setProperty("--deck-percent", CONFIG.regionSplitDeckPercent + "%");
+  document.documentElement.style.setProperty("--deck-chrome-crop", CONFIG.deckChromeCropPx + "px");
+  document.documentElement.style.setProperty("--rotation", CONFIG.rotationDegrees + "deg");
+
+  // A rotation is only a correct fix if the wrapper's own box swaps to match:
+  // rotating a 100vw x 100vh box in place clips instead of reorienting.
+  // Still one value to edit (CONFIG.rotationDegrees) — this just derives the
+  // box from it instead of leaving it wrong.
+  (function applyRotationBox() {
+    const rotated = Math.abs(CONFIG.rotationDegrees % 180) === 90;
+    const style = document.createElement("style");
+    style.textContent = "#viewport-wrapper{width:" + (rotated ? "100vh" : "100vw") +
+      ";height:" + (rotated ? "100vw" : "100vh") + ";}";
+    document.head.appendChild(style);
+  })();
+</script>
+</head>
+<body>
+  <div id="viewport-wrapper">
+    <div id="deck-region">
+      <div id="deck-placeholder">Loading deck&hellip;</div>
+    </div>
+    <div id="clock-region">
+      <div id="clock-time">--:--:-- --</div>
+      <div id="clock-date">&nbsp;</div>
+      <div id="clock-hebrew">&nbsp;</div>
+    </div>
+  </div>
+  <div id="viewport-debug"></div>
+  <div id="degraded-indicator">deck refresh degraded &mdash; using timed fallback</div>
+
+<script>
+(function () {
+  const deckRegion = document.getElementById("deck-region");
+  const timeEl = document.getElementById("clock-time");
+  const dateEl = document.getElementById("clock-date");
+  const hebrewEl = document.getElementById("clock-hebrew");
+  const debugEl = document.getElementById("viewport-debug");
+  const degradedEl = document.getElementById("degraded-indicator");
+
+  let deckFrame = null;
+  let deckLoadTimeoutId = null;
+  let lastTickAt = Date.now();
+  let lastKnownModifiedTime = null;
+  let lastHebrewFetchDateKey = null;
+
+  // ---- viewport debug readout ----
+
+  function renderViewportDebug() {
+    if (!CONFIG.viewportDebugEnabled) return;
+    debugEl.textContent = window.innerWidth + " x " + window.innerHeight;
+    debugEl.style.display = "block";
+  }
+  window.addEventListener("resize", renderViewportDebug);
+
+  // ---- deck region: load + recovery ----
+
+  function buildDeckUrl() {
+    const url = new URL(CONFIG.deckEmbedUrl);
+    url.searchParams.set("_r", Date.now());
+    return url.toString();
+  }
+
+  function setDeckSrc() {
+    clearTimeout(deckLoadTimeoutId);
+
+    if (!deckFrame) {
+      deckFrame = document.createElement("iframe");
+      deckFrame.allow = "autoplay";
+      deckFrame.setAttribute("allowfullscreen", "true");
+      deckFrame.addEventListener("load", function () {
+        clearTimeout(deckLoadTimeoutId);
+      });
+    }
+
+    // Src is set before the frame is attached to the document, so there's no
+    // implicit about:blank navigation queued that could fire its own "load"
+    // and clear the watchdog before the real deck content has loaded.
+    deckFrame.src = buildDeckUrl();
+    if (!deckFrame.parentNode) {
+      deckRegion.innerHTML = "";
+      deckRegion.appendChild(deckFrame);
+    }
+
+    // Cross-origin frame contents can't be inspected, so a bounded load timeout
+    // (retrying the src) is the only way to catch a load that never completes.
+    deckLoadTimeoutId = setTimeout(setDeckSrc, CONFIG.deckLoadTimeoutMs);
+  }
+
+  // Unconditional periodic reload. This is the only freshness mechanism while
+  // change detection is off, and stays running as a backstop when it's on,
+  // since a frame that rendered fine and later went blank mid-session can't be
+  // detected any other way from a cross-origin parent.
+  setInterval(setDeckSrc, CONFIG.fixedReloadIntervalMs);
+
+  // ---- deck change detection (built, disabled by default this cycle) ----
+
+  function setDegraded(isDegraded) {
+    degradedEl.style.display = isDegraded ? "block" : "none";
+  }
+
+  function pollDeckModified() {
+    const url = new URL("https://www.googleapis.com/drive/v3/files/" + CONFIG.deckFileId);
+    url.searchParams.set("fields", "modifiedTime");
+    url.searchParams.set("key", CONFIG.driveApiKey);
+
+    // A stalled request (network drop, DNS/TLS hang) never resolves or
+    // rejects fetch() on its own — without an explicit abort it would never
+    // reach setDegraded(true), which is exactly the silent failure the spec
+    // rules out.
+    const controller = new AbortController();
+    const abortTimeoutId = setTimeout(function () { controller.abort(); }, CONFIG.driveApiTimeoutMs);
+
+    fetch(url.toString(), { signal: controller.signal })
+      .then(function (res) {
+        if (!res.ok) throw new Error("drive metadata request failed: " + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        setDegraded(false);
+        if (lastKnownModifiedTime !== null && data.modifiedTime !== lastKnownModifiedTime) {
+          setDeckSrc();
+        }
+        lastKnownModifiedTime = data.modifiedTime;
+      })
+      .catch(function () {
+        setDegraded(true);
+      })
+      .finally(function () {
+        clearTimeout(abortTimeoutId);
+      });
+  }
+
+  if (CONFIG.changeDetectionEnabled && CONFIG.driveApiKey) {
+    pollDeckModified();
+    setInterval(pollDeckModified, CONFIG.fixedReloadIntervalMs);
+  }
+
+  // ---- clock strip ----
+
+  const datePartsFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: CONFIG.timezone, year: "numeric", month: "2-digit", day: "2-digit"
+  });
+  const timeFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: CONFIG.timezone, hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true
+  });
+  const dateFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: CONFIG.timezone, weekday: "long", month: "long", day: "numeric", year: "numeric"
+  });
+
+  function getDatePartsInTZ() {
+    const parts = datePartsFormatter.formatToParts(new Date());
+    const out = {};
+    for (const p of parts) out[p.type] = p.value;
+    return out;
+  }
+
+  function updateClock() {
+    // lastTickAt only advances once the display has actually been rendered —
+    // if formatting starts throwing every tick, the clock freezes AND the
+    // watchdog below sees a stale tick and reloads, instead of the watchdog
+    // being satisfied by a function call that never touched the screen.
+    try {
+      const timeText = timeFormatter.format(new Date());
+      const dateText = dateFormatter.format(new Date());
+      timeEl.textContent = timeText;
+      if (dateEl.textContent !== dateText) dateEl.textContent = dateText;
+      lastTickAt = Date.now();
+    } catch (e) {
+      // leave lastTickAt stale on purpose — the watchdog is the recovery path
+    }
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // Page-level watchdog: if the clock stops advancing, a stale clock on the
+  // wall is worse than a blank one, so reload the whole page.
+  setInterval(function () {
+    if (Date.now() - lastTickAt > CONFIG.clockStaleThresholdMs) {
+      location.reload();
+    }
+  }, CONFIG.heartbeatCheckIntervalMs);
+
+  // ---- Hebrew date (civil-day rollover, holds last good value on failure) ----
+
+  function fetchHebrewDate(parts, dateKey) {
+    // Plain fetch, not JSONP: Hebcal's converter endpoint serves its JSON
+    // response with CORS allowed, so a cross-origin fetch reads it directly —
+    // confirmed against the live endpoint. JSONP's <script src> approach was
+    // tried first and rejected: Chromium's cross-origin read blocking refuses
+    // the response (the endpoint serves application/json even with a
+    // callback param), so the callback never fires and the strip would stay
+    // blank forever on real hardware.
+    const url = new URL("https://www.hebcal.com/converter");
+    url.searchParams.set("cfg", "json");
+    url.searchParams.set("g2h", "1");
+    url.searchParams.set("gy", parts.year);
+    url.searchParams.set("gm", parts.month);
+    url.searchParams.set("gd", parts.day);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(function () { controller.abort(); }, CONFIG.hebcalTimeoutMs);
+
+    fetch(url.toString(), { signal: controller.signal })
+      .then(function (res) {
+        if (!res.ok) throw new Error("hebcal request failed: " + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        if (data && data.hebrew) {
+          hebrewEl.textContent = data.hebrew;
+          lastHebrewFetchDateKey = dateKey;
+        }
+      })
+      .catch(function () {
+        // last-good value (if any) stays on screen; checkHebrewRollover
+        // retries on its next minute tick since lastHebrewFetchDateKey wasn't set
+      })
+      .finally(function () {
+        clearTimeout(timeoutId);
+      });
+  }
+
+  function checkHebrewRollover() {
+    const parts = getDatePartsInTZ();
+    const dateKey = parts.year + "-" + parts.month + "-" + parts.day;
+    if (dateKey !== lastHebrewFetchDateKey) {
+      fetchHebrewDate(parts, dateKey);
+    }
+  }
+  setInterval(checkHebrewRollover, 60 * 1000);
+
+  // ---- startup ----
+
+  renderViewportDebug();
+  setDeckSrc();
+  checkHebrewRollover();
+})();
+</script>
+</body>
+</html>

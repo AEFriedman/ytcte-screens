@@ -1,1 +1,14 @@
 # ytcte-screens — Backlog
+
+- Drive change-detection path (metadata poll) is unverified this cycle — no real API key exists yet. Verify once a key is created and the flag is flipped on.
+- Secular date and Hebrew date don't have an explicitly specified midnight-rollover behavior. Should be defined (spec review r1 + r2).
+- No retry/backoff policy defined for failed Hebcal lookups (spec review r1 + r2).
+- Viewport debug readout ships default-on for v0.1.0 (intentional, to verify orientation on the real screen) — flip its config value off once orientation is confirmed.
+- Fixed deck-reload interval (default 10 min) isn't tied to the deck's own loop length. If the deck's own loop runs longer than the interval, the tail of its content may never display before the region reloads. Needs a product decision on how the interval relates to loop length (spec review r2).
+- Immediately after a page-level watchdog reload, there is no "last-good" Hebrew date to fall back to until the first Hebcal fetch after that reload succeeds — a brief blank/undefined state right after recovery (spec review r2).
+- Before enabling change detection, confirm the deck file can be made publicly link-shared — a bare API key can only read `files.get` on a public file, so this is a broader exposure than publish-to-web (source deck becomes downloadable by anyone holding the committed file id). Needs explicit sign-off; see DECISIONS.md (code review r1).
+- Rotation hook: `applyRotationBox` correctly swaps the wrapper's box dimensions, but all internal clock/date sizing uses `vh` units, which still reference the real (unrotated) viewport height. At a 90/270deg correction the clock text would render roughly 44% too small. Inert at the current 0deg default; needs fixing before rotation is ever actually used (code review r1).
+- Decide whether `#viewport-debug` and `#degraded-indicator` should live inside the rotating `#viewport-wrapper` so they rotate with the content too, or stay fixed to the physical viewport (code review r1).
+- Init-order fragility: the clock watchdog and the first deck load are both registered near the end of the startup script. An exception thrown earlier during initialization (e.g. an `Intl` constructor rejecting the configured timezone) would leave the page with no recovery path and a placeholder deck for up to the full fixed-reload interval. Low likelihood, but self-recovery is the entire point of that code (code review r1).
+- Consider adding a `sandbox` attribute to the deck iframe (belt-and-braces; the framed Google origin is trusted, so this is optional hardening, not a fix) (code review r1).
+- `deckChromeCropPx: 60` and the 80/20 split are unverified against the real panel — confirm on the actual mounted screen alongside the orientation check (code review r1, restates spec's own external dependency).
